@@ -159,6 +159,7 @@ export default function App() {
   const [consultas, setConsultas] = useState([]);
   const [activePatient, setActivePatient] = useState(null);
   const [activeConsulta, setActiveConsulta] = useState(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const showToast = (msg, type = 'success', duration = 4000) => {
     setToast({ msg, type });
@@ -193,11 +194,19 @@ export default function App() {
     const { data, error } = await supabase
       .from('consultas')
       .select('*, pacientes(*)')
-      .in('estado', ['Agendada', 'En espera', 'En atención'])
+      .in('estado', ['Agendada', 'En espera', 'En atención', 'Derivada a urgencia'])
       .order('created_at', { ascending: true })
       .limit(20);
     if (error) throw error;
-    setConsultas(data || []);
+    
+    const sortedData = (data || []).sort((a, b) => {
+      if (a.estado === 'En atención' && b.estado !== 'En atención') return -1;
+      if (b.estado === 'En atención' && a.estado !== 'En atención') return 1;
+      if (a.urgencia && !b.urgencia) return -1;
+      if (!a.urgencia && b.urgencia) return 1;
+      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    });
+    setConsultas(sortedData);
   };
 
   useEffect(() => {
@@ -234,6 +243,36 @@ export default function App() {
               </button>
             ))}
           </div>
+          
+          <div style={{ marginTop: '2rem', textAlign: 'left' }}>
+            <button onClick={() => setHelpOpen(!helpOpen)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', padding: 0 }}>
+              <ChevronRight size={16} style={{ transform: helpOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
+              ¿Cómo usar cada rol?
+            </button>
+            {helpOpen && (
+              <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', animation: 'fadeIn 0.3s forwards' }}>
+                <div style={{ background: 'rgba(37,99,235,0.1)', padding: '1rem', borderRadius: '8px', borderLeft: '3px solid #2563eb' }}>
+                  <p style={{ margin: '0 0 0.5rem', color: '#60a5fa', fontWeight: 600, fontSize: '0.85rem' }}>Funcionario de Ventanilla</p>
+                  <p style={{ margin: 0, color: '#d1d5db', fontSize: '0.8rem', lineHeight: 1.5 }}>
+                    Encargado de la recepción. Puede buscar pacientes por RUT, registrarlos, agendar consultas (o derivarlas a urgencia), y gestionar el retiro de medicamentos.
+                  </p>
+                </div>
+                <div style={{ background: 'rgba(5,150,105,0.1)', padding: '1rem', borderRadius: '8px', borderLeft: '3px solid #059669' }}>
+                  <p style={{ margin: '0 0 0.5rem', color: '#34d399', fontWeight: 600, fontSize: '0.85rem' }}>Médico</p>
+                  <p style={{ margin: 0, color: '#d1d5db', fontSize: '0.8rem', lineHeight: 1.5 }}>
+                    Visualiza la agenda con urgencias al inicio. Puede registrar signos, diagnósticos, emitir recetas o certificados y cerrar consultas.
+                  </p>
+                </div>
+                <div style={{ background: 'rgba(124,58,237,0.1)', padding: '1rem', borderRadius: '8px', borderLeft: '3px solid #7c3aed' }}>
+                  <p style={{ margin: '0 0 0.5rem', color: '#a78bfa', fontWeight: 600, fontSize: '0.85rem' }}>Enfermero</p>
+                  <p style={{ margin: 0, color: '#d1d5db', fontSize: '0.8rem', lineHeight: 1.5 }}>
+                    Próximamente permitirá gestionar procedimientos de enfermería, curaciones y administración de medicamentos.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     );
@@ -766,13 +805,6 @@ function MedicoAtencion({ consulta, paciente, goTo, showToast, load }) {
   });
   const f = (key, val) => setForm(p => ({ ...p, [key]: val }));
 
-  const derivarUrgencia = () => load(async () => {
-    const { error } = await supabase.from('consultas').update({ estado: 'Derivada a urgencia', urgencia: true }).eq('id', consulta.id);
-    if (error) throw error;
-    showToast('Paciente derivado a urgencias', 'warning');
-    goTo('dashboard');
-  }, 'Derivando...');
-
   const cerrar = async () => {
     if (!window.confirm('Consulta clínicamente cerrada.\n\n¿Desea cerrar administrativamente?')) return;
     load(async () => {
@@ -800,7 +832,6 @@ function MedicoAtencion({ consulta, paciente, goTo, showToast, load }) {
     <div style={{ animation: 'fadeIn 0.4s forwards' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '0.5rem' }}>
         <BackBtn onClick={() => goTo('dashboard')} label="Volver a Agenda" />
-        <Btn variant="danger-solid" onClick={derivarUrgencia}><AlertTriangle size={15} /> Derivar a Urgencia (Deterioro)</Btn>
       </div>
       <Breadcrumb steps={[{ label: 'Agenda', onClick: () => goTo('dashboard') }, { label: 'Atención Clínica' }]} />
 
