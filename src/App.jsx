@@ -45,6 +45,7 @@ export default function App() {
     const { data, error } = await supabase
       .from('consultas')
       .select('*, pacientes(nombre, rut, edad)')
+      .neq('estado', 'Completada')
       .order('created_at', { ascending: false })
       .limit(30);
     if (error) throw error;

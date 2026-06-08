@@ -72,7 +72,11 @@ export default function FuncRetiro({ goTo, showToast, load }) {
       retirado_por: resultado.nombreRetira
     }]);
     if (error) throw error;
-    showToast(esIncidente ? 'Incidente registrado' : 'Entrega registrada correctamente ✓');
+
+    // Archivar automáticamente de la bandeja
+    await supabase.from('consultas').update({ estado: 'Completada' }).eq('id', resultado.receta.consulta_id);
+
+    showToast(esIncidente ? 'Incidente registrado' : 'Entrega registrada y paciente archivado ✓');
     goTo('dashboard');
   }, 'Registrando...');
 

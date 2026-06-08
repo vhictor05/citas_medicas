@@ -11,6 +11,13 @@ export default function FuncDashboard({ consultas, goTo, showToast, load, loadCo
     await loadConsultas();
   }, 'Actualizando...');
 
+  const archivarConsulta = (id) => load(async () => {
+    const { error } = await supabase.from('consultas').update({ estado: 'Completada' }).eq('id', id);
+    if (error) throw error;
+    showToast('Consulta archivada y quitada de la bandeja', 'success');
+    await loadConsultas();
+  }, 'Archivando...');
+
   const reasignarMedico = async (id) => {
     const nuevo = window.prompt('Ingrese el nombre del nuevo médico:');
     if (!nuevo) return;
@@ -61,6 +68,11 @@ export default function FuncDashboard({ consultas, goTo, showToast, load, loadCo
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
                     <Btn size="sm" variant="secondary" onClick={() => reasignarMedico(c.id)}>Reasignar Médico</Btn>
                     <Btn size="sm" variant="primary" onClick={() => marcarLlegada(c.id)}>Marcar Llegada</Btn>
+                  </div>
+                )}
+                {c.estado === 'Cerrada' && (
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <Btn size="sm" variant="success" onClick={() => archivarConsulta(c.id)}>Archivar / Listo</Btn>
                   </div>
                 )}
               </div>

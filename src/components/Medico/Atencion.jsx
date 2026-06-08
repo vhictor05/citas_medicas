@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { supabase } from '../../supabaseClient';
 import { FileText, CheckCircle2 } from 'lucide-react';
-import { BackBtn, Breadcrumb, Card, Field, Input, Textarea, PatientCard, Btn } from '../ui';
+import { BackBtn, Breadcrumb, Card, Field, Input, Textarea, PatientCard, Btn, Modal } from '../ui';
 
 export default function MedicoAtencion({ consulta, paciente, goTo, showToast, load }) {
+  const [showConfirm, setShowConfirm] = useState(false);
   const [form, setForm] = useState({
     signos: '', sintomas: '', examen: '', diag1: '', diag2: '', obs: '', instrucciones: '',
     emiteReceta: false, receta: '', emiteCert: false, reposo: '',
@@ -11,7 +12,7 @@ export default function MedicoAtencion({ consulta, paciente, goTo, showToast, lo
   });
   const f = (key, val) => setForm(p => ({ ...p, [key]: val }));
 
-  const cerrar = async () => {
+  const confirmarCierre = () => {
     if (!form.diag1.trim()) {
       showToast('Debe ingresar al menos un Diagnóstico Principal', 'error');
       return;
@@ -27,8 +28,11 @@ export default function MedicoAtencion({ consulta, paciente, goTo, showToast, lo
       return;
     }
 
-    if (!window.confirm('Consulta clínicamente cerrada.\n\n¿Desea cerrar administrativamente?')) return;
+    setShowConfirm(true);
+  };
     
+  const ejecutarCierre = () => {
+    setShowConfirm(false);
     load(async () => {
       const ficha = {
         consulta_id: consulta.id, 
@@ -54,7 +58,8 @@ export default function MedicoAtencion({ consulta, paciente, goTo, showToast, lo
       const { error: e1 } = await supabase.from('fichas_medicas').insert([ficha]);
       if (e1) throw e1;
       
-      const { error: e2 } = await supabase.from('consultas').update({ estado: 'Cerrada' }).eq('id', consulta.id);
+      const nuevoEstado = (form.emiteReceta || form.reqSegui) ? 'Cerrada' : 'Completada';
+      const { error: e2 } = await supabase.from('consultas').update({ estado: nuevoEstado }).eq('id', consulta.id);
       if (e2) throw e2;
       
       showToast('Atención finalizada y guardada ✓');
@@ -156,11 +161,22 @@ export default function MedicoAtencion({ consulta, paciente, goTo, showToast, lo
             </Field>
           </div>
 
-          <Btn variant="success" onClick={cerrar} style={{ width: '100%', marginTop: '1rem', padding: '0.85rem' }}>
+          <Btn variant="success" onClick={confirmarCierre} style={{ width: '100%', marginTop: '1rem', padding: '0.85rem' }}>
             <CheckCircle2 size={18} /> Cerrar Consulta y Guardar Ficha Médica
           </Btn>
         </Card>
       </div>
+
+      <Modal 
+        isOpen={showConfirm} 
+        title="Finalizar Atención" 
+        onClose={() => setShowConfirm(false)} 
+        onConfirm={ejecutarCierre}
+        confirmText="Sí, Cerrar Consulta"
+      >
+        <p>¿Está seguro de finalizar esta atención?</p>
+        <p style={{ color: '#9ca3af', marginTop: '0.5rem' }}>Una vez cerrada, no podrá ser modificada ni se podrán emitir más documentos para esta consulta.</p>
+      </Modal>
     </div>
   );
 }
