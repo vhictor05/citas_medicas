@@ -11,18 +11,28 @@ import Input from '../ui/Input';
 import Textarea from '../ui/Textarea';
 import Btn from '../ui/Btn';
 import PatientCard from '../ui/PatientCard';
+import Modal from '../ui/Modal';
 
 function MedicoAtencion({ consulta, paciente, goTo, showToast, load }) {
+  const [showConfirm, setShowConfirm] = useState(false);
   const [form, setForm] = useState({ signos:'', sintomas:'', examen:'', diag1:'', diag2:'', obs:'', instrucciones:'', emiteReceta:false, receta:'', emiteCert:false, reposo:'', reqSegui:false, diasSegui:'' });
   const f = (key,val) => setForm(p=>({...p,[key]:val}));
 
-  const cerrar = async()=>{
-    if (!window.confirm('Consulta clínicamente cerrada.\n\n¿Desea cerrar administrativamente?')) return;
+  const confirmarCierre = () => {
+    if (!form.diag1.trim()) { showToast('Debe ingresar al menos un Diagnóstico Principal', 'error'); return; }
+    if (form.emiteCert && (!form.reposo || parseInt(form.reposo) <= 0)) { showToast('Ingrese un número de días de reposo válido', 'error'); return; }
+    if (form.reqSegui && (!form.diasSegui || parseInt(form.diasSegui) <= 0)) { showToast('Ingrese un número de días de seguimiento válido', 'error'); return; }
+    setShowConfirm(true);
+  };
+
+  const ejecutarCierre = () => {
+    setShowConfirm(false);
     load(async()=>{
       const ficha = { consulta_id:consulta.id, paciente_rut:paciente.rut, fecha:new Date().toISOString().split('T')[0], medico:'Médico Titular', signos_vitales:form.signos, sintomas_detectados:form.sintomas, examen_fisico:form.examen, diagnostico:form.diag1, diagnostico_secundario:form.diag2, observaciones:form.obs, instrucciones_paciente:form.instrucciones, emite_receta:form.emiteReceta, detalle_receta:form.emiteReceta?form.receta:null, emite_certificado:form.emiteCert, dias_reposo:form.emiteCert?parseInt(form.reposo)||null:null, requiere_seguimiento:form.reqSegui, dias_seguimiento:form.reqSegui?parseInt(form.diasSegui)||null:null, estado_cierre:'Cerrada Administrativamente' };
       const { error:e1 } = await supabase.from('fichas_medicas').insert([ficha]);
       if (e1) throw e1;
-      const { error:e2 } = await supabase.from('consultas').update({estado:'Cerrada'}).eq('id',consulta.id);
+      const nuevoEstado = (form.emiteReceta || form.reqSegui) ? 'Cerrada' : 'Completada';
+      const { error:e2 } = await supabase.from('consultas').update({estado:nuevoEstado}).eq('id',consulta.id);
       if (e2) throw e2;
       showToast('Atención finalizada y guardada ✓');
       goTo('dashboard');
@@ -124,11 +134,22 @@ function MedicoAtencion({ consulta, paciente, goTo, showToast, load }) {
             <Textarea placeholder="Indicaciones, cuidados en casa, medicación..." value={form.instrucciones} onChange={e=>f('instrucciones',e.target.value)} style={{ minHeight:'70px' }}/>
           </Field>
 
-          <Btn variant="success" onClick={cerrar} style={{ width:'100%', marginTop:'1rem', padding:'0.85rem' }}>
+          <Btn variant="success" onClick={confirmarCierre} style={{ width:'100%', marginTop:'1rem', padding:'0.85rem' }}>
             <CheckCircle2 size={17}/> Cerrar Consulta y Guardar Ficha Médica
           </Btn>
         </Card>
       </div>
+
+      <Modal 
+        isOpen={showConfirm} 
+        title="Finalizar Atención" 
+        onClose={() => setShowConfirm(false)} 
+        onConfirm={ejecutarCierre}
+        confirmText="Sí, Cerrar Consulta"
+      >
+        <p>¿Está seguro de finalizar esta atención?</p>
+        <p style={{ color: '#9ca3af', marginTop: '0.5rem' }}>Una vez cerrada, no podrá ser modificada ni se podrán emitir más documentos para esta consulta.</p>
+      </Modal>
     </div>
   );
 }

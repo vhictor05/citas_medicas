@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, Pill, AlertTriangle, CheckCircle2, AlertCircle, UserPlus } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { T } from '../../utils/theme';
+import { formatRut } from '../../utils/formatters';
 import BackBtn from '../ui/BackBtn';
 import Breadcrumb from '../ui/Breadcrumb';
 import Card from '../ui/Card';
@@ -37,7 +38,8 @@ function FuncRetiro({ goTo, showToast, load }) {
   const registrarRetiro = (esIncidente) => load(async()=>{
     const { error } = await supabase.from('retiros').insert([{ paciente_rut:rutPac.trim(), consulta_id:resultado.receta.consulta_id, rut_retira:rutRet.trim(), autorizado:!esIncidente, fecha:new Date().toISOString().split('T')[0], incidente:esIncidente, motivo_rechazo:esIncidente?'Representante no autorizado':null, retirado_por:resultado.nombreRetira }]);
     if (error) throw error;
-    showToast(esIncidente?'Incidente registrado':'Entrega registrada correctamente ✓');
+    await supabase.from('consultas').update({ estado: 'Completada' }).eq('id', resultado.receta.consulta_id);
+    showToast(esIncidente?'Incidente registrado':'Entrega registrada y paciente archivado ✓');
     goTo('dashboard');
   },'Registrando...');
 
@@ -58,10 +60,10 @@ function FuncRetiro({ goTo, showToast, load }) {
         <Card accent={T.purple}>
           <SectionTitle icon={<Pill size={16}/>} title="Verificar Autorización" subtitle="Ingrese RUT del titular y del retirador"/>
           <Field label="RUT del Paciente (titular)">
-            <Input placeholder="12.345.678-9" value={rutPac} onChange={e=>setRutPac(e.target.value)}/>
+            <Input placeholder="12.345.678-9" value={rutPac} onChange={e=>setRutPac(formatRut(e.target.value))}/>
           </Field>
           <Field label="RUT de quien retira">
-            <Input placeholder="RUT del retirador" value={rutRet} onChange={e=>setRutRet(e.target.value)}/>
+            <Input placeholder="RUT del retirador" value={rutRet} onChange={e=>setRutRet(formatRut(e.target.value))}/>
           </Field>
           <Btn variant="primary" onClick={verificar} style={{ width:'100%', marginTop:'0.5rem' }}>
             <Search size={15}/> Verificar Autorización

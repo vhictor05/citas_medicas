@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, UserPlus, CalendarPlus, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { T } from '../../utils/theme';
+import { formatRut, isValidRut, isValidEmail } from '../../utils/formatters';
 import BackBtn from '../ui/BackBtn';
 import Breadcrumb from '../ui/Breadcrumb';
 import Card from '../ui/Card';
@@ -17,11 +18,12 @@ function FuncNuevaAtencion({ goTo, showToast, load, activePatient, setActivePati
   const [rut, setRut]             = useState('');
   const [showCrear, setShowCrear] = useState(false);
   const [nuevoPac, setNuevoPac]   = useState({ nombre:'', edad:'', direccion:'', telefono:'', email:'', alergias:'' });
-  const [atencion, setAtencion]   = useState({ motivo:'', medico:'', urgencia:false, hora:'' });
+  const [atencion, setAtencion]   = useState({ motivo:'', medico:'', urgencia:false, fecha:new Date().toISOString().split('T')[0], hora:'' });
   const HORAS = ['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','14:00','14:30','15:00','15:30','16:00'];
 
   const buscar = () => load(async()=>{
     if (!rut.trim()) { showToast('Ingrese un RUT','warning'); return; }
+    if (!isValidRut(rut.trim())) { showToast('RUT inválido', 'error'); return; }
     setActivePatient(null); setShowCrear(false);
     const { data, error } = await supabase.from('pacientes').select('*').eq('rut',rut.trim()).single();
     if (error && error.code!=='PGRST116') throw error;
@@ -30,7 +32,11 @@ function FuncNuevaAtencion({ goTo, showToast, load, activePatient, setActivePati
   },'Buscando paciente...');
 
   const crear = () => load(async()=>{
+    if (!isValidRut(rut.trim())) { showToast('RUT inválido', 'error'); return; }
     if (!nuevoPac.nombre.trim()) { showToast('El nombre es obligatorio','error'); return; }
+    if (nuevoPac.edad && parseInt(nuevoPac.edad) <= 0) { showToast('La edad debe ser mayor a 0', 'error'); return; }
+    if (nuevoPac.email && !isValidEmail(nuevoPac.email)) { showToast('El email ingresado no es válido', 'error'); return; }
+
     const { data, error } = await supabase.from('pacientes').insert([{ rut:rut.trim(), nombre:nuevoPac.nombre.trim(), edad:parseInt(nuevoPac.edad)||null, direccion:nuevoPac.direccion||null, telefono:nuevoPac.telefono||null, email:nuevoPac.email||null, alergias:nuevoPac.alergias||null }]).select().single();
     if (error) throw error;
     setActivePatient(data); setShowCrear(false); setPaso(2);
@@ -39,10 +45,25 @@ function FuncNuevaAtencion({ goTo, showToast, load, activePatient, setActivePati
 
   const agendar = () => load(async()=>{
     if (!atencion.motivo.trim()) { showToast('El motivo es obligatorio','error'); return; }
+    if (!atencion.fecha) { showToast('Seleccione una fecha','error'); return; }
     if (!atencion.hora) { showToast('Seleccione una hora','error'); return; }
-    const fecha = new Date().toISOString().split('T')[0];
+    
+    // Validar topes de horario para el mismo médico
+    if (atencion.medico.trim()) {
+      const { data: conflict } = await supabase.from('consultas')
+        .select('id')
+        .eq('fecha', atencion.fecha)
+        .eq('hora', atencion.hora)
+        .eq('medico_asignado', atencion.medico.trim())
+        .in('estado', ['Agendada', 'En espera', 'En atención']);
+      if (conflict && conflict.length > 0) {
+        showToast('El médico ya tiene una cita agendada en esa fecha y hora', 'error');
+        return;
+      }
+    }
+
     const estado = atencion.urgencia ? 'Derivada a urgencia' : 'Agendada';
-    const { error } = await supabase.from('consultas').insert([{ paciente_rut:activePatient.rut, fecha, hora:atencion.hora, motivo:atencion.motivo.trim(), estado, urgencia:atencion.urgencia, medico_asignado:atencion.medico.trim()||null }]);
+    const { error } = await supabase.from('consultas').insert([{ paciente_rut:activePatient.rut, fecha:atencion.fecha, hora:atencion.hora, motivo:atencion.motivo.trim(), estado, urgencia:atencion.urgencia, medico_asignado:atencion.medico.trim()||null }]);
     if (error) throw error;
     showToast(atencion.urgencia ? '🚨 Derivado a Urgencia' : 'Consulta agendada correctamente ✓');
     goTo('dashboard');
@@ -59,7 +80,7 @@ function FuncNuevaAtencion({ goTo, showToast, load, activePatient, setActivePati
             <SectionTitle icon={<Search size={16}/>} title="Buscar Paciente" subtitle="Ingrese el RUT para buscar en el sistema"/>
             <Field label="RUT del Paciente">
               <div style={{ display:'flex', gap:'0.5rem' }}>
-                <Input placeholder="12.345.678-9" value={rut} onChange={e=>setRut(e.target.value)} onKeyDown={e=>e.key==='Enter'&&buscar()}/>
+                <Input placeholder="12.345.678-9" value={rut} onChange={e=>setRut(formatRut(e.target.value))} onKeyDown={e=>e.key==='Enter'&&buscar()}/>
                 <Btn variant="primary" onClick={buscar}><Search size={15}/> Buscar</Btn>
               </div>
             </Field>
@@ -125,6 +146,9 @@ function FuncNuevaAtencion({ goTo, showToast, load, activePatient, setActivePati
               </Field>
               <Field label="Médico Asignado (Opcional)">
                 <Input placeholder="Nombre del médico" value={atencion.medico} onChange={e=>setAtencion({...atencion,medico:e.target.value})}/>
+              </Field>
+              <Field label="Seleccione Fecha *">
+                <Input type="date" value={atencion.fecha} onChange={e=>setAtencion({...atencion,fecha:e.target.value})} />
               </Field>
               <Field label="Seleccione Hora *">
                 <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem' }}>
