@@ -1,159 +1,157 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { Stethoscope, Users, LogOut, ChevronRight } from 'lucide-react';
-import { Loader, Toast, Btn } from './components/ui';
 import { handleSupabaseError } from './utils/errorHandler';
+import { Stethoscope, Users, LogOut, Heart } from 'lucide-react';
+import { T, css } from './utils/theme';
 
-import FuncDashboard from './components/Funcionario/Dashboard';
-import FuncNuevaAtencion from './components/Funcionario/NuevaAtencion';
-import FuncRetiro from './components/Funcionario/RetiroMedicamentos';
+import Loader from './components/ui/Loader';
+import Toast from './components/ui/Toast';
+import EcgBackground from './components/ui/EcgBackground';
+import DrChat from './components/ui/DrChat';
+import RoleButton from './components/ui/RoleButton';
+import Btn from './components/ui/Btn';
 
-import MedicoDashboard from './components/Medico/Dashboard';
-import MedicoAtencion from './components/Medico/Atencion';
+import FuncDashboard from './components/Funcionario/FuncDashboard';
+import FuncNuevaAtencion from './components/Funcionario/FuncNuevaAtencion';
+import FuncRetiro from './components/Funcionario/FuncRetiro';
+
+import MedicoDashboard from './components/Medico/MedicoDashboard';
+import MedicoAtencion from './components/Medico/MedicoAtencion';
 
 export default function App() {
-  const [role, setRole] = useState(null);
-  const [view, setView] = useState('dashboard');
-  const [loading, setLoading] = useState(false);
+  const [role, setRole]               = useState(null);
+  const [view, setView]               = useState('dashboard');
+  const [loading, setLoading]         = useState(false);
   const [loadingText, setLoadingText] = useState('Procesando...');
-  const [toast, setToast] = useState(null);
-  const [consultas, setConsultas] = useState([]);
-  const [activePatient, setActivePatient] = useState(null);
+  const [toast, setToast]             = useState(null);
+  const [consultas, setConsultas]     = useState([]);
+  const [activePatient, setActivePatient]   = useState(null);
   const [activeConsulta, setActiveConsulta] = useState(null);
-  const [helpOpen, setHelpOpen] = useState(false);
 
-  const showToast = (msg, type = 'success', duration = 4000) => {
+  const showToast = (msg, type='success', duration=4000) => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), duration);
+    setTimeout(()=>setToast(null), duration);
   };
 
-  const load = async (fn, text = 'Cargando...') => {
-    setLoadingText(text);
-    setLoading(true);
-    try {
-      await fn();
-    } catch (err) {
+  const load = async (fn, text='Cargando...') => {
+    setLoadingText(text); setLoading(true);
+    try { await fn(); }
+    catch(err) {
       console.error(err);
-      const friendlyMsg = handleSupabaseError(err);
-      showToast(friendlyMsg, 'error');
-    } finally {
-      setLoading(false);
+      const handledError = handleSupabaseError(err, text);
+      showToast(handledError.message || 'Error al conectar con Supabase', 'error');
     }
+    finally { setLoading(false); }
   };
 
   const loadConsultas = async () => {
-    const { data, error } = await supabase
-      .from('consultas')
-      .select('*, pacientes(nombre, rut, edad)')
-      .neq('estado', 'Completada')
-      .order('created_at', { ascending: false })
-      .limit(30);
+    const { data, error } = await supabase.from('consultas').select('*, pacientes(nombre,rut,edad)').order('created_at',{ascending:false}).limit(30);
     if (error) throw error;
-    setConsultas(data || []);
+    setConsultas(data||[]);
   };
 
   const loadAgendaMedica = async () => {
-    const { data, error } = await supabase
-      .from('consultas')
-      .select('*, pacientes(*)')
-      .in('estado', ['Agendada', 'En espera', 'En atención', 'Derivada a urgencia'])
-      .order('created_at', { ascending: true })
-      .limit(20);
+    const { data, error } = await supabase.from('consultas').select('*, pacientes(*)').in('estado',['Agendada','En espera','En atención','Derivada a urgencia']).order('created_at',{ascending:true}).limit(20);
     if (error) throw error;
-    
-    const sortedData = (data || []).sort((a, b) => {
-      if (a.estado === 'En atención' && b.estado !== 'En atención') return -1;
-      if (b.estado === 'En atención' && a.estado !== 'En atención') return 1;
+    const sorted = (data||[]).sort((a,b)=>{
+      if (a.estado==='En atención' && b.estado!=='En atención') return -1;
+      if (b.estado==='En atención' && a.estado!=='En atención') return 1;
       if (a.urgencia && !b.urgencia) return -1;
       if (!a.urgencia && b.urgencia) return 1;
-      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      return new Date(a.created_at||0)-new Date(b.created_at||0);
     });
-    setConsultas(sortedData);
+    setConsultas(sorted);
   };
 
-  useEffect(() => {
+  useEffect(()=>{
     if (!role) return;
-    if (role === 'funcionario') load(loadConsultas, 'Cargando consultas...').catch(e => showToast(handleSupabaseError(e), 'error'));
-    if (role === 'medico') load(loadAgendaMedica, 'Cargando agenda...').catch(e => showToast(handleSupabaseError(e), 'error'));
-  }, [role]);
+    if (role==='funcionario') load(loadConsultas,'Cargando consultas...').catch(e=>showToast(e.message,'error'));
+    if (role==='medico') load(loadAgendaMedica,'Cargando agenda...').catch(e=>showToast(e.message,'error'));
+  },[role]);
 
   const goTo = (v) => setView(v);
 
+  // ── Pantalla Selección de Rol ──
   if (!role) {
+    const roles = [
+      { label:'Funcionario de Ventanilla', role:'funcionario', icon:<Users size={20}/>, color:T.blue,   desc:'Recepción, agendamiento y retiro de medicamentos' },
+      { label:'Médico',                    role:'medico',      icon:<Stethoscope size={20}/>, color:T.green, desc:'Agenda de pacientes y registro clínico' }
+    ];
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(ellipse at 60% 30%, #1e3a5f 0%, #111827 70%)' }}>
-        <div style={{ background: 'rgba(31,41,55,0.9)', backdropFilter: 'blur(20px)', border: '1px solid #374151', borderRadius: '20px', padding: '3rem 2.5rem', maxWidth: '420px', width: '90%', textAlign: 'center', boxShadow: '0 24px 48px rgba(0,0,0,0.5)', animation: 'fadeIn 0.5s forwards' }}>
-          <style>{`@keyframes fadeIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }`}</style>
-          <div style={{ width: '72px', height: '72px', borderRadius: '18px', background: 'rgba(37,99,235,0.2)', border: '1px solid rgba(59,130,246,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem', color: '#60a5fa' }}>
-            <Stethoscope size={36} />
+      <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:T.bg, position:'relative', overflow:'hidden' }}>
+        <style>{css}</style>
+        {/* Fondo decorativo */}
+        <div style={{ position:'absolute', top:'-20%', left:'-10%', width:'60vw', height:'60vw', borderRadius:'50%', background:'radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 70%)', pointerEvents:'none' }}/>
+        <div style={{ position:'absolute', bottom:'-15%', right:'-5%', width:'45vw', height:'45vw', borderRadius:'50%', background:'radial-gradient(circle, rgba(139,92,246,0.05) 0%, transparent 70%)', pointerEvents:'none' }}/>
+        {/* Grid decorativo */}
+        <div style={{ position:'absolute', inset:0, backgroundImage:`linear-gradient(${T.border} 1px, transparent 1px), linear-gradient(90deg, ${T.border} 1px, transparent 1px)`, backgroundSize:'60px 60px', opacity:0.3, pointerEvents:'none' }}/>
+        {/* ECG animado */}
+        <EcgBackground/>
+
+        <div style={{ position:'relative', zIndex:1, background:`linear-gradient(160deg, ${T.bgCard} 0%, rgba(14,22,35,0.97) 100%)`, border:`1px solid ${T.border}`, borderRadius:'20px', padding:'2.5rem 2rem', maxWidth:'400px', width:'90%', boxShadow:'0 32px 64px rgba(0,0,0,0.6)', animation:'fadeUp 0.5s forwards' }}>
+          {/* Logo */}
+          <div style={{ textAlign:'center', marginBottom:'2rem' }}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'0.6rem', margin:'0 auto 1rem' }}>
+              <div style={{ width:60, height:60, borderRadius:'16px', background:'linear-gradient(135deg, rgba(29,78,216,0.4), rgba(37,99,235,0.2))', border:`1px solid rgba(59,130,246,0.35)`, display:'flex', alignItems:'center', justifyContent:'center', color:T.blue, boxShadow:'0 8px 24px rgba(37,99,235,0.2)' }}>
+                <Stethoscope size={28}/>
+              </div>
+              <div style={{ width:60, height:60, borderRadius:'16px', background:'linear-gradient(135deg, rgba(220,38,38,0.35), rgba(239,68,68,0.15))', border:'1px solid rgba(239,68,68,0.4)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 8px 24px rgba(239,68,68,0.2)' }}>
+                <Heart size={28} color="#ef4444" fill="#ef4444"/>
+              </div>
+            </div>
+            <h1 style={{ color:T.textPrimary, margin:'0 0 0.25rem', fontSize:'1.6rem', fontWeight:800, letterSpacing:'-0.02em' }}>SaludNet</h1>
+            <p style={{ color:T.textSecondary, margin:0, fontSize:'0.825rem' }}>Sistema de Gestión de Atención Médica</p>
           </div>
-          <h1 style={{ color: '#f9fafb', margin: '0 0 0.5rem', fontSize: '1.75rem', fontWeight: 800 }}>CESFAM</h1>
-          <p style={{ color: '#6b7280', margin: '0 0 2.5rem', fontSize: '0.9rem' }}>Sistema de Gestión de Atención Médica</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {[
-              { label: 'Funcionario de Ventanilla', role: 'funcionario', icon: <Users size={18} />, color: '#2563eb' },
-              { label: 'Médico', role: 'medico', icon: <Stethoscope size={18} />, color: '#059669' }
-            ].map(r => (
-              <button key={r.role}
-                onClick={() => { setRole(r.role); setView('dashboard'); }}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.9rem 1.25rem', background: 'rgba(255,255,255,0.05)', border: '1px solid #374151', borderRadius: '10px', color: '#f9fafb', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: '0.95rem', transition: 'all 0.2s' }}
-                onMouseEnter={e => { e.currentTarget.style.background = `${r.color}22`; e.currentTarget.style.borderColor = r.color; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor = '#374151'; }}>
-                <span style={{ color: r.color }}>{r.icon}</span> Ingresar como {r.label}
-              </button>
+
+          {/* Botones de rol */}
+          <div style={{ display:'flex', flexDirection:'column', gap:'0.625rem' }}>
+            {roles.map(r=>(
+              <RoleButton key={r.role} {...r} onClick={()=>{ if(!r.disabled){ setRole(r.role); setView('dashboard'); } }}/>
             ))}
           </div>
-          
-          <div style={{ marginTop: '2rem', textAlign: 'left' }}>
-            <button onClick={() => setHelpOpen(!helpOpen)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: '0.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', padding: 0 }}>
-              <ChevronRight size={16} style={{ transform: helpOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} />
-              ¿Cómo usar cada rol?
-            </button>
-            {helpOpen && (
-              <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '1rem', animation: 'fadeIn 0.3s forwards' }}>
-                <div style={{ background: 'rgba(37,99,235,0.1)', padding: '1rem', borderRadius: '8px', borderLeft: '3px solid #2563eb' }}>
-                  <p style={{ margin: '0 0 0.5rem', color: '#60a5fa', fontWeight: 600, fontSize: '0.85rem' }}>Funcionario de Ventanilla</p>
-                  <p style={{ margin: 0, color: '#d1d5db', fontSize: '0.8rem', lineHeight: 1.5 }}>
-                    Encargado de la recepción. Puede buscar pacientes por RUT, registrarlos, agendar consultas (o derivarlas a urgencia), y gestionar el retiro de medicamentos.
-                  </p>
-                </div>
-                <div style={{ background: 'rgba(5,150,105,0.1)', padding: '1rem', borderRadius: '8px', borderLeft: '3px solid #059669' }}>
-                  <p style={{ margin: '0 0 0.5rem', color: '#34d399', fontWeight: 600, fontSize: '0.85rem' }}>Médico</p>
-                  <p style={{ margin: 0, color: '#d1d5db', fontSize: '0.8rem', lineHeight: 1.5 }}>
-                    Visualiza la agenda con urgencias al inicio. Puede registrar signos, diagnósticos, emitir recetas o certificados y cerrar consultas.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
+
+          {/* Mini chat Dr. SaludNet */}
+          <DrChat />
         </div>
       </div>
     );
   }
 
+  // ── App Shell ──
+  const roleLabels = { funcionario:'Ventanilla', medico:'Médico' };
+  const roleColors = { funcionario:T.blue, medico:T.green };
   return (
-    <div style={{ minHeight: '100vh', background: '#111827', fontFamily: 'Inter, sans-serif' }}>
-      {loading && <Loader text={loadingText} />}
-      <Toast toast={toast} />
+    <div style={{ minHeight:'100vh', background:T.bg, fontFamily:'DM Sans, sans-serif' }}>
+      <style>{css}</style>
+      {loading && <Loader text={loadingText}/>}
+      <Toast toast={toast}/>
 
-      <header style={{ background: '#1f2937', borderBottom: '1px solid #374151', padding: '1rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ background: '#2563eb', color: '#fff', padding: '0.5rem', borderRadius: '8px' }}><Stethoscope size={20} /></div>
-          <span style={{ color: '#f9fafb', fontWeight: 800, fontSize: '1.1rem' }}>CESFAM</span>
+      {/* Header */}
+      <header style={{ background:`linear-gradient(90deg, ${T.bgCard} 0%, rgba(14,22,35,0.98) 100%)`, borderBottom:`1px solid ${T.border}`, padding:'0.875rem 2rem', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0, zIndex:100, backdropFilter:'blur(8px)' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+          <div style={{ background:'linear-gradient(135deg, #1d4ed8, #2563eb)', color:'#fff', padding:'0.45rem', borderRadius:'9px', display:'flex', boxShadow:'0 4px 12px rgba(37,99,235,0.4)' }}>
+            <Stethoscope size={18}/>
+          </div>
+          <div>
+            <span style={{ color:T.textPrimary, fontWeight:800, fontSize:'1rem', letterSpacing:'-0.01em' }}>SaludNet</span>
+            <span style={{ color:T.textMuted, fontSize:'0.7rem', display:'block', marginTop:'-1px' }}>Sistema de Gestión Médica</span>
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <span style={{ background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)', padding: '0.3rem 0.9rem', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase' }}>{role}</span>
-          <Btn variant="secondary" onClick={() => { setRole(null); setView('dashboard'); }}><LogOut size={15} /> Cambiar Rol</Btn>
+        <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.3rem 0.75rem', background:T.bgHover, border:`1px solid ${T.border}`, borderRadius:'8px' }}>
+            <div style={{ width:7, height:7, borderRadius:'50%', background:roleColors[role], boxShadow:`0 0 6px ${roleColors[role]}` }}/>
+            <span style={{ color:T.textSecondary, fontSize:'0.78rem', fontWeight:600 }}>{roleLabels[role]}</span>
+          </div>
+          <Btn variant="secondary" onClick={()=>{ setRole(null); setView('dashboard'); }}><LogOut size={14}/> Cambiar Rol</Btn>
         </div>
       </header>
 
-      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
-        {role === 'funcionario' && view === 'dashboard' && <FuncDashboard consultas={consultas} goTo={goTo} showToast={showToast} load={load} loadConsultas={loadConsultas} setLoadingText={setLoadingText} />}
-        {role === 'funcionario' && view === 'nueva-atencion' && <FuncNuevaAtencion goTo={goTo} showToast={showToast} load={load} activePatient={activePatient} setActivePatient={setActivePatient} />}
-        {role === 'funcionario' && view === 'retiro' && <FuncRetiro goTo={goTo} showToast={showToast} load={load} />}
-
-        {role === 'medico' && view === 'dashboard' && <MedicoDashboard consultas={consultas} goTo={goTo} showToast={showToast} load={load} loadAgenda={loadAgendaMedica} setActiveConsulta={setActiveConsulta} setActivePatient={setActivePatient} />}
-        {role === 'medico' && view === 'atencion' && <MedicoAtencion consulta={activeConsulta} paciente={activePatient} goTo={goTo} showToast={showToast} load={load} />}
+      <main style={{ maxWidth:'1200px', margin:'0 auto', padding:'2rem' }}>
+        {role==='funcionario' && view==='dashboard'      && <FuncDashboard consultas={consultas} goTo={goTo} showToast={showToast} load={load} loadConsultas={loadConsultas}/>}
+        {role==='funcionario' && view==='nueva-atencion' && <FuncNuevaAtencion goTo={goTo} showToast={showToast} load={load} activePatient={activePatient} setActivePatient={setActivePatient}/>}
+        {role==='funcionario' && view==='retiro'         && <FuncRetiro goTo={goTo} showToast={showToast} load={load}/>}
+        {role==='medico'      && view==='dashboard'      && <MedicoDashboard consultas={consultas} goTo={goTo} showToast={showToast} load={load} loadAgenda={loadAgendaMedica} setActiveConsulta={setActiveConsulta} setActivePatient={setActivePatient}/>}
+        {role==='medico'      && view==='atencion'       && <MedicoAtencion consulta={activeConsulta} paciente={activePatient} goTo={goTo} showToast={showToast} load={load}/>}
       </main>
     </div>
   );

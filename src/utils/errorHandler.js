@@ -1,22 +1,32 @@
-export const handleSupabaseError = (error) => {
-  if (!error) return 'Error desconocido.';
+export const handleSupabaseError = (error, action) => {
+  if (!error) return { message: 'Error desconocido.', originalError: error };
   
-  console.error("Supabase Error:", error);
+  console.error(`Error in ${action || 'Supabase'}:`, error);
 
-  // Mapeo de códigos de error de Postgres / Supabase a mensajes amigables
-  switch (error.code) {
-    case '23505':
-      return 'Ya existe un registro con estos datos únicos (ej. RUT duplicado).';
-    case 'PGRST116':
-      return 'No se encontró el registro solicitado.';
-    case '23503':
-      return 'Error de relación. Es probable que el paciente no exista.';
-    case '23514':
-      return 'Los datos ingresados no cumplen con las reglas del sistema.';
-    default:
-      if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
-        return 'Error de conexión. Revisa tu acceso a internet e intenta nuevamente.';
-      }
-      return error.message || 'Ha ocurrido un error inesperado en la base de datos.';
+  let message = 'Error inesperado de conexión.';
+
+  if (error.code) {
+    switch (error.code) {
+      case '23505':
+        message = 'Ya existe un registro con estos datos únicos (ej. RUT duplicado).';
+        break;
+      case 'PGRST116':
+        message = 'No se encontró el registro solicitado.';
+        break;
+      case '23503':
+        message = 'Error de relación. Es probable que el paciente no exista.';
+        break;
+      case '23514':
+        message = 'Los datos ingresados no cumplen con las reglas del sistema.';
+        break;
+      default:
+        message = error.message || 'Ha ocurrido un error inesperado en la base de datos.';
+    }
+  } else if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+    message = 'Error de conexión. Revisa tu acceso a internet e intenta nuevamente.';
+  } else {
+    message = error.message || 'Ha ocurrido un error inesperado.';
   }
+
+  return { message, originalError: error };
 };
