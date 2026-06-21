@@ -144,7 +144,7 @@ function FuncNuevaAtencion({ goTo, showToast, load, activePatient, setActivePati
               <Field label="Motivo de Consulta *">
                 <Textarea placeholder="Describa el motivo..." value={atencion.motivo} onChange={e=>setAtencion({...atencion,motivo:e.target.value})} style={{ minHeight:'70px' }}/>
               </Field>
-              <Field label="Médico Asignado (Opcional)">
+              <Field label="Médico Asignado">
                 <Input placeholder="Nombre del médico" value={atencion.medico} onChange={e=>setAtencion({...atencion,medico:e.target.value})}/>
               </Field>
               <Field label="Seleccione Fecha *">
